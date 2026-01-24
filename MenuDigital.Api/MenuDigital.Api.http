@@ -1,0 +1,6 @@
+@MenuDigital.Api_HostAddress = http://localhost:5016
+
+GET {{MenuDigital.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
