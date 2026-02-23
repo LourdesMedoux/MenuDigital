@@ -1,35 +1,37 @@
 ﻿using MenuDigital.Common.DTOs.Categories;
 using MenuDigital.Common.Entities;
-using MenuDigital.Data.Data;
-using Microsoft.EntityFrameworkCore;
+using MenuDigital.Data.Repositories.Interfaces;
+using System;
+using System.Linq;
 
 namespace MenuDigital.Services.Categories;
 
 public class CategoryService : ICategoryService
 {
-    private readonly AppDbContext _db;
+    private readonly ICategoryRepository _repository;
 
-    public CategoryService(AppDbContext db)
+    public CategoryService(ICategoryRepository repository)
     {
-        _db = db;
+        _repository = repository;
     }
 
     public async Task<List<CategoryResponse>> GetMineAsync(int restaurantUserId)
     {
-        return await _db.Categories
-            .Where(x => x.RestaurantUserId == restaurantUserId)
+        var categories = await _repository.GetByRestaurantAsync(restaurantUserId);
+
+        return categories
             .OrderBy(x => x.Name)
             .Select(x => new CategoryResponse { Id = x.Id, Name = x.Name })
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task<CategoryResponse> CreateAsync(int restaurantUserId, CategoryCreateRequest request)
     {
         var name = request.Name.Trim();
 
-        var exists = await _db.Categories.AnyAsync(x =>
-            x.RestaurantUserId == restaurantUserId &&
-            x.Name.ToLower() == name.ToLower());
+        var categories = await _repository.GetByRestaurantAsync(restaurantUserId);
+
+        var exists = categories.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
         if (exists) throw new InvalidOperationException("Ya existe una categoría con ese nombre.");
 
@@ -39,42 +41,40 @@ public class CategoryService : ICategoryService
             RestaurantUserId = restaurantUserId
         };
 
-        _db.Categories.Add(entity);
-        await _db.SaveChangesAsync();
+        await _repository.AddAsync(entity);
+        await _repository.SaveChangesAsync();
 
         return new CategoryResponse { Id = entity.Id, Name = entity.Name };
     }
 
     public async Task<CategoryResponse> UpdateAsync(int restaurantUserId, int categoryId, CategoryUpdateRequest request)
     {
-        var entity = await _db.Categories.SingleOrDefaultAsync(x =>
-            x.Id == categoryId && x.RestaurantUserId == restaurantUserId);
+        var entity = await _repository.GetByIdAsync(categoryId, restaurantUserId);
 
         if (entity is null) throw new KeyNotFoundException("Categoría no encontrada.");
 
         var name = request.Name.Trim();
 
-        var exists = await _db.Categories.AnyAsync(x =>
-            x.RestaurantUserId == restaurantUserId &&
-            x.Id != categoryId &&
-            x.Name.ToLower() == name.ToLower());
+        var categories = await _repository.GetByRestaurantAsync(restaurantUserId);
+
+        var exists = categories.Any(x => x.Id != categoryId && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
         if (exists) throw new InvalidOperationException("Ya existe una categoría con ese nombre.");
 
         entity.Name = name;
-        await _db.SaveChangesAsync();
+        _repository.Update(entity);
+        await _repository.SaveChangesAsync();
 
         return new CategoryResponse { Id = entity.Id, Name = entity.Name };
     }
 
     public async Task DeleteAsync(int restaurantUserId, int categoryId)
     {
-        var entity = await _db.Categories.SingleOrDefaultAsync(x =>
-            x.Id == categoryId && x.RestaurantUserId == restaurantUserId);
+        var entity = await _repository.GetByIdAsync(categoryId, restaurantUserId);
 
         if (entity is null) throw new KeyNotFoundException("Categoría no encontrada.");
 
-        _db.Categories.Remove(entity);
-        await _db.SaveChangesAsync();
+        _repository.Remove(entity);
+        await _repository.SaveChangesAsync();
     }
 }

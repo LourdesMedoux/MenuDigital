@@ -10,12 +10,18 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System;
 using System.Text;
+using MenuDigital.Data.Repositories.Interfaces;
+using MenuDigital.Data.Repositories.Implementations;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<IRestaurantUserRepository, RestaurantUserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPublicMenuService, PublicMenuService>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 
 

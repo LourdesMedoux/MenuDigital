@@ -1,21 +1,22 @@
 ﻿using MenuDigital.Common.DTOs.Account;
 using MenuDigital.Data.Data;
+using MenuDigital.Data.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuDigital.Services.Account;
 
 public class AccountService : IAccountService
 {
-    private readonly AppDbContext _db;
+    private readonly IRestaurantUserRepository _repository;
 
-    public AccountService(AppDbContext db)
+    public AccountService(IRestaurantUserRepository repository)
     {
-        _db = db;
+        _repository = repository;
     }
 
     public async Task<AccountResponse> UpdateAsync(int restaurantUserId, AccountUpdateRequest request)
     {
-        var user = await _db.RestaurantUsers.SingleOrDefaultAsync(x => x.Id == restaurantUserId);
+        var user = await _repository.GetByIdAsync(restaurantUserId);
         if (user is null) throw new KeyNotFoundException("Cuenta no encontrada.");
 
         var ok = BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash);
@@ -23,7 +24,7 @@ public class AccountService : IAccountService
 
         var email = request.Email.Trim().ToLowerInvariant();
 
-        var emailTaken = await _db.RestaurantUsers.AnyAsync(x => x.Id != restaurantUserId && x.Email.ToLower() == email);
+        var emailTaken = await _repository.ExistsByEmailExceptAsync(restaurantUserId, email);
         if (emailTaken) throw new InvalidOperationException("El email ya está registrado.");
 
         user.RestaurantName = request.RestaurantName.Trim();
@@ -35,7 +36,7 @@ public class AccountService : IAccountService
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         }
 
-        await _db.SaveChangesAsync();
+        await _repository.SaveChangesAsync();
 
         return new AccountResponse
         {
@@ -48,13 +49,13 @@ public class AccountService : IAccountService
 
     public async Task DeleteAsync(int restaurantUserId, AccountDeleteRequest request)
     {
-        var user = await _db.RestaurantUsers.SingleOrDefaultAsync(x => x.Id == restaurantUserId);
+        var user = await _repository.GetByIdAsync(restaurantUserId);
         if (user is null) throw new KeyNotFoundException("Cuenta no encontrada.");
 
         var ok = BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash);
         if (!ok) throw new InvalidOperationException("Contraseña actual incorrecta.");
 
-        _db.RestaurantUsers.Remove(user);
-        await _db.SaveChangesAsync();
+        await _repository.RemoveAsync(user);
+        await _repository.SaveChangesAsync();
     }
 }

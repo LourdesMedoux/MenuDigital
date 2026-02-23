@@ -1,43 +1,44 @@
 ﻿using MenuDigital.Common.DTOs.Public;
-using MenuDigital.Data.Data;
-using Microsoft.EntityFrameworkCore;
+using MenuDigital.Data.Repositories.Interfaces;
+using System.Linq;
 
 namespace MenuDigital.Services.Public;
 
 public class PublicMenuService : IPublicMenuService
 {
-    private readonly AppDbContext _db;
+    private readonly IRestaurantUserRepository _restaurantRepository;
+    private readonly IProductRepository _productRepository;
 
-    public PublicMenuService(AppDbContext db)
+    public PublicMenuService(IRestaurantUserRepository restaurantRepository, IProductRepository productRepository)
     {
-        _db = db;
+        _restaurantRepository = restaurantRepository;
+        _productRepository = productRepository;
     }
 
     public async Task<List<PublicRestaurantResponse>> GetRestaurantsAsync()
     {
-        return await _db.RestaurantUsers
-            .AsNoTracking()
+        var restaurants = await _restaurantRepository.GetAllAsync();
+
+        return restaurants
             .OrderBy(x => x.RestaurantName)
             .Select(x => new PublicRestaurantResponse
             {
                 Id = x.Id,
                 RestaurantName = x.RestaurantName
             })
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task<List<PublicProductResponse>> GetMenuAsync(int restaurantId, int? categoryId, bool? onlyFavorites, bool? onlyDiscounted)
     {
-        var query = _db.Products
-            .AsNoTracking()
-            .Include(x => x.Category)
-            .Where(x => x.RestaurantUserId == restaurantId);
+        var products = await _productRepository.GetByRestaurantAsync(restaurantId);
+        var query = products.AsQueryable();
 
         if (categoryId.HasValue) query = query.Where(x => x.CategoryId == categoryId.Value);
         if (onlyFavorites == true) query = query.Where(x => x.IsFavorite);
         if (onlyDiscounted == true) query = query.Where(x => x.HappyHourEnabled && x.DiscountPercent > 0);
 
-        return await query
+        return query
             .OrderBy(x => x.Name)
             .Select(x => new PublicProductResponse
             {
@@ -53,6 +54,6 @@ public class PublicMenuService : IPublicMenuService
                     ? x.Price * (1 - (x.DiscountPercent / 100m))
                     : x.Price
             })
-            .ToListAsync();
+            .ToList();
     }
 }
